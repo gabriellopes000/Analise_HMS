@@ -4,9 +4,9 @@
 # Descrição: Gera hietogramas sintéticos usando curvas de Huff (Q1-Q4) para
 #            diferentes tempos de retorno e cria arquivos para HEC-HMS
 # Autor: Gabriel Lopes
-# Data: 2024
-################################################################################
-
+# Data: 2026
+###############################################################################
+#
 # 1. CARREGAMENTO DE BIBLIOTECAS -----------------------------------------------
 library(dssrip)
 library(foreach)
@@ -20,22 +20,32 @@ library(readxl)
 library(splines)
 library(beepr)
 
-# 2. CONFIGURAÇÃO DE CAMINHOS --------------------------------------------------
+###############################################################################
+
+# 2. CONFIGURAÇÃO DE CAMINHOS E PARÂMETROS -------------------------------------
 
 # Defina o diretório base do projeto
-dir_base <- "C:\\Users\\Gabriel Lopes\\Desktop\\Projetos\\Minosa\\08_HMS\\01_Codigos\\Extrair_resultados_HMS\\files\\Teste"
+dir_base <- "C:\\Users\\Gabriel Lopes\\Desktop\\Projetos\\07_Maravilhas_II_Revisao\\04_HMS"
 
-# Caminhos dos arquivos
-caminho_huff <- file.path(dir_base, "Dist_HUFF.xlsx")
+# Caminho do arquivo de quantis (a curva de Huff agora está embutida no script,
+# ver seção 4)
 caminho_quantis <- file.path(dir_base, "quantis_TET.xlsx")
 
 # Configuração do projeto HEC-HMS
-projectName <- "HMS_Minosa_Teste"
+projectName <- "HMS_MRV2_TC"
 projectFolder <- paste0(file.path(dir_base, projectName), "/")
 basin <- "Basin 1"
 
 # Sub-bacias do projeto
-subbasins <- c("AD1")
+subbasins <- c("MRV1_S0", "MRV1_S1", "MRV2" )
+
+# Tempos de retorno a processar
+# >>> Edite esta lista para escolher quais TRs entram no processamento <
+# Os valores devem corresponder exatamente aos nomes das colunas de TR
+# existentes na planilha de quantis (quantis_TET.xlsx)
+trs <- c(2, 5, 10, 20, 25, 50, 100, 200, 500, 1000, 10000, 88000, 96800)
+
+###############################################################################
 
 # 3. FUNÇÕES AUXILIARES --------------------------------------------------------
 
@@ -99,6 +109,37 @@ ajustar_curvas_huff <- function(dados) {
   return(modelos)
 }
 
+#' Converte uma duração textual (ex.: "5 min", "1 h", "2 d") em minutos
+#' Aceita "min"/"m", "h", "d" como unidade, com ou sem espaço, e vírgula
+#' decimal. Não depende de posição/ordem das linhas.
+#' @param duracao_texto Vetor de strings com a duração (ex.: "5 min")
+#' @return Vetor numérico com a duração em minutos
+converter_duracao_minutos <- function(duracao_texto) {
+  
+  duracao_texto <- trimws(as.character(duracao_texto))
+  
+  partes <- str_match(duracao_texto, "^([0-9]+[.,]?[0-9]*)\\s*(min|m|h|d)$")
+  
+  if (any(is.na(partes[, 1]))) {
+    idx_invalidos <- which(is.na(partes[, 1]))
+    stop("Não foi possível interpretar a(s) duração(ões): ",
+         paste(duracao_texto[idx_invalidos], collapse = ", "),
+         ". Formatos aceitos: 'N min', 'N h', 'N d' (ex.: '5 min', '1 h', '2 d').")
+  }
+  
+  valor <- as.numeric(gsub(",", ".", partes[, 2]))
+  unidade <- tolower(partes[, 3])
+  
+  fator <- dplyr::case_when(
+    unidade %in% c("min", "m") ~ 1,
+    unidade == "h"             ~ 60,
+    unidade == "d"             ~ 1440,
+    TRUE                       ~ NA_real_
+  )
+  
+  valor * fator
+}
+
 #' Calcula precipitação acumulada para um dado percentual de tempo
 #' @param modelo Modelo ajustado (Q1, Q2, Q3 ou Q4)
 #' @param percentual_tempo Percentual de tempo (0-100)
@@ -106,15 +147,10 @@ ajustar_curvas_huff <- function(dados) {
 #' @param tipo_quartil Tipo do quartil ("Q1", "Q2", "Q3" ou "Q4")
 #' @return Precipitação acumulada (mm)
 calcular_precipitacao_acumulada <- function(modelo, percentual_tempo, 
-                                           intensidade, tipo_quartil) {
+                                            intensidade, tipo_quartil) {
   
-  # Criar dataframe para predição
   novos_dados <- data.frame(Tempo = percentual_tempo)
-  
-  # Calcular precipitação acumulada percentual
   precip_percentual <- predict(modelo, newdata = novos_dados)
-  
-  # Converter para mm
   precip_mm <- precip_percentual * intensidade / 100
   
   return(as.numeric(precip_mm))
@@ -127,13 +163,9 @@ calcular_precipitacao_acumulada <- function(modelo, percentual_tempo,
 #' @return Lista com FatorTranslacao e FatorAmplificacao
 calcular_fatores_correcao <- function(modelo, NB, intensidade) {
   
-  # Fator de Translação: ajusta o início da curva para zero
-  # Calcula a precipitação no primeiro intervalo
   df_primeiro <- data.frame(Tempo = (1 / NB) * 100)
   fator_translacao <- predict(modelo, newdata = df_primeiro) * intensidade / 100
   
-  # Fator de Amplificação: garante que a precipitação total = intensidade
-  # Calcula a precipitação total sem correção
   df_total <- data.frame(Tempo = 100)
   precip_total_sem_correcao <- predict(modelo, newdata = df_total) * intensidade / 100
   
@@ -143,49 +175,6 @@ calcular_fatores_correcao <- function(modelo, NB, intensidade) {
     translacao = as.numeric(fator_translacao),
     amplificacao = as.numeric(fator_amplificacao)
   ))
-}
-
-#' Gera hietograma discretizado para um evento
-#' @param modelo Modelo ajustado
-#' @param NB Número de blocos (intervalos)
-#' @param intensidade Precipitação total (mm)
-#' @param tipo_quartil Tipo do quartil ("Q1", "Q2", "Q3" ou "Q4")
-#' @return Vetor com precipitações incrementais (mm)
-gerar_hietograma <- function(modelo, NB, intensidade, tipo_quartil) {
-  
-  # Calcular fatores de correção
-  fatores <- calcular_fatores_correcao(modelo, NB, intensidade)
-  
-  # Vetor para armazenar precipitação acumulada
-  precip_acumulada <- numeric(NB + 1)
-  precip_acumulada[1] <- 0
-  
-  # Calcular precipitação acumulada para cada intervalo
-  for (j in 1:NB) {
-    percentual_tempo <- (j / NB) * 100
-    
-    # Caso especial: último intervalo deve ser exatamente a intensidade total
-    if (j == NB) {
-      precip_acumulada[j + 1] <- intensidade
-    } else {
-      # Calcular precipitação acumulada bruta
-      precip_bruta <- calcular_precipitacao_acumulada(
-        modelo, percentual_tempo, intensidade, tipo_quartil
-      )
-      
-      # Aplicar correções
-      precip_acumulada[j + 1] <- (precip_bruta - fatores$translacao) * 
-                                  fatores$amplificacao
-    }
-  }
-  
-  # Converter para precipitação incremental
-  precip_incremental <- diff(precip_acumulada)
-  
-  # Garantir que não há valores negativos
-  precip_incremental[precip_incremental < 0] <- 0
-  
-  return(precip_incremental)
 }
 
 #' Determina qual quartil usar com base na duração
@@ -207,39 +196,46 @@ cat("=================================================================\n")
 cat("GERAÇÃO DE HIETOGRAMAS SINTÉTICOS - DISTRIBUIÇÃO DE HUFF\n")
 cat("=================================================================\n\n")
 
-# Verificar se os arquivos existem
-if (!file.exists(caminho_huff)) {
-  stop("Arquivo não encontrado: ", caminho_huff)
-}
+# Dados da distribuição de Huff embutidos no script (backup permanente,
+# elimina a dependência da planilha Dist_HUFF.xlsx)
+cat("Carregando dados de distribuição de Huff (embutidos no script)...\n")
+dados_huff <- structure(list(
+  Tempo = c(0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100),
+  Q1 = c(0, 16, 33, 43, 52, 60, 66, 71, 75, 79, 82, 84, 86, 88, 90, 92, 94, 96, 97, 98, 100),
+  Q2 = c(0, 3, 8, 12, 16, 22, 29, 39, 51, 62, 70, 76, 81, 85, 88, 91, 93, 95, 97, 98, 100),
+  Q3 = c(0, 3, 6, 9, 12, 15, 19, 23, 27, 32, 38, 45, 57, 70, 79, 85, 89, 92, 95, 97, 100),
+  Q4 = c(0, 2, 5, 8, 10, 13, 16, 19, 22, 25, 28, 32, 35, 39, 45, 51, 59, 72, 84, 92, 100)
+), class = "data.frame", row.names = c(NA, -21L))
+cat("  - Dados carregados:", nrow(dados_huff), "linhas\n\n")
+
+# Verificar se a planilha de quantis existe
 if (!file.exists(caminho_quantis)) {
   stop("Arquivo não encontrado: ", caminho_quantis)
 }
-
-# Carregar dados de distribuição de Huff
-cat("Carregando dados de distribuição de Huff...\n")
-dados_huff <- read_excel(caminho_huff)
-cat("  - Dados carregados:", nrow(dados_huff), "linhas\n\n")
 
 # Carregar quantis de precipitação
 cat("Carregando quantis de precipitação...\n")
 quantis <- read_excel(caminho_quantis)
 
-# Adicionar colunas de duração
-tempo_quantis_horas <- c(6/60, 10/60, 15/60, 20/60, 30/60, 1, 2, 3, 4, 6, 8, 
-                         10, 12, 18, 24, 24*2, 3*24, 5*24, 7*24, 10*24, 15*24,
-                         20*24, 30*24)
-quantis$Duracao <- tempo_quantis_horas * 60  # em minutos
-quantis$horas <- tempo_quantis_horas
+# Converter a coluna de duração (texto, ex.: "5 min", "1 h", "2 d") para minutos.
+# Substitui o antigo vetor posicional 'tempo_quantis_horas', que dependia da
+# planilha ter exatamente 23 linhas nessa ordem específica.
+quantis$Duracao <- converter_duracao_minutos(quantis$Duracao)
+quantis$horas <- quantis$Duracao / 60
 cat("  - Quantis carregados:", nrow(quantis), "durações\n\n")
+
+# Checagem de sanidade: TRs configurados que não existem na planilha
+trs_faltantes <- setdiff(as.character(trs), colnames(quantis))
+if (length(trs_faltantes) > 0) {
+  stop("Os seguintes TRs configurados em 'trs' não foram encontrados como ",
+       "colunas na planilha de quantis: ", paste(trs_faltantes, collapse = ", "))
+}
 
 # 5. AJUSTE DOS MODELOS DE HUFF ------------------------------------------------
 
 modelos_huff <- ajustar_curvas_huff(dados_huff)
 
 # 6. CONFIGURAÇÃO PARA GERAÇÃO DE EVENTOS --------------------------------------
-
-# Tempos de retorno a processar
-trs <- c(2, 5, 10, 20, 25, 50, 100, 200, 500, 1000, 10000, 88000, 96800)
 
 # Meses para nomenclatura
 meses <- c("January", "February", "March", "April", "May", "June",
@@ -306,9 +302,9 @@ foreach(tr = trs) %do% {
         # Calcular usando o modelo
         novos_dados <- data.frame(Tempo = percentual_tempo)
         precip_bruta <- predict(modelo_escolhido, newdata = novos_dados) * 
-                        intensidade / 100
+          intensidade / 100
         precip_acumulada[j + 1] <- (as.numeric(precip_bruta) - fatores$translacao) * 
-                                    fatores$amplificacao
+          fatores$amplificacao
       }
     }
     
@@ -317,19 +313,15 @@ foreach(tr = trs) %do% {
     
     # 8. GRAVAÇÃO NO ARQUIVO DSS -----------------------------------------------
     
-    # Criar TimeSeriesContainer
     tsc <- .jnew("hec/io/TimeSeriesContainer")
     
-    # Definir nome e caminho DSS
     dss_path <- paste0("//", nome_evento, "/PRECIP-CUM/31Dec1999 - ", dias, 
                        "Jan2000/", bloco, "MIN/GAGE/")
     tsc$fullName <- dss_path
     
-    # Configurar tempo inicial
     start <- .jnew("hec/heclib/util/HecTime", "01Jan2000", "0000")
     tsc$interval <- as.integer(bloco)
     
-    # Criar vetor de tempos
     timec <- start$value()
     times <- .jarray(1:(NB + 1))
     times[[1]] <- start$value()
@@ -339,14 +331,12 @@ foreach(tr = trs) %do% {
       times[[j + 1]] <- as.integer(timec)
     }
     
-    # Calcular tempo final
     time1 <- as.POSIXct("2000-01-01 00:00:00", format = "%Y-%m-%d %H:%M:%S")
     time1 <- time1 + bloco * 60 * NB
     timef <- paste0(strftime(time1, format = "%d "),
                     meses[as.integer(strftime(time1, format = "%m"))],
                     strftime(time1, format = " %Y, %H:%M"))
     
-    # Configurar valores
     values <- .jarray(precip_acumulada)
     tsc$times <- times
     tsc$values <- values
@@ -354,12 +344,10 @@ foreach(tr = trs) %do% {
     tsc$units <- "MM"
     tsc$type <- "INST-CUM"
     
-    # Gravar no DSS
     dssFile$put(tsc)
     
     # 9. GERAÇÃO DE ARQUIVOS HEC-HMS -------------------------------------------
     
-    # Arquivo .gage
     txt_gage <- paste0(txt_gage, 
                        "Gage: ", nome_evento, "\n",
                        "Latitude:0\n",
@@ -376,7 +364,6 @@ foreach(tr = trs) %do% {
                        "dss File: ", projectFileDss, "\n",
                        "End:\n\n")
     
-    # Arquivo .met
     metFile <- paste0(projectFolder, nome_evento, ".met")
     metTxt <- paste0("Meteorology: ", nome_evento, "\n",
                      "     Version: 4.12\n",
@@ -390,7 +377,6 @@ foreach(tr = trs) %do% {
                      "     Use Basin Model: ", basin, "\n",
                      "End:")
     
-    # Adicionar sub-bacias ao arquivo .met
     foreach(sb = subbasins) %do% {
       metTxt <- paste0(metTxt, "\nSubbasin: ", sb, "\n",
                        "     Gage:", nome_evento, "\n",
@@ -399,14 +385,12 @@ foreach(tr = trs) %do% {
     
     write(metTxt, file = metFile, append = FALSE)
     
-    # Arquivo .hms
     txt_met <- paste0(txt_met, 
                       "Precipitation: ", nome_evento, "\n",
                       "     FileName: ", nome_evento, ".met\n",
                       "     Description: \n",
                       "End:\n\n")
     
-    # Arquivo .run
     control <- ifelse(dias <= 5, "dp<=5d", "dp>5d")
     txt_run <- paste0(txt_run, "\n\nRun: ", nome_evento, "\n",
                       "    Basin: ", basin, "\n",
@@ -424,10 +408,8 @@ foreach(tr = trs) %do% {
 
 cat("\nFinalizando e salvando arquivos...\n")
 
-# Fechar arquivo DSS
 dssFile$close()
 
-# Salvar arquivo .gage
 gageFile <- paste0(projectFolder, projectName, ".gage")
 gageHeader <- paste0("Gage Manager: ", projectName, "\n",
                      "Version: 4.12\n",
@@ -437,7 +419,6 @@ write(gageHeader, file = gageFile, append = FALSE)
 write(txt_gage, file = gageFile, append = TRUE)
 cat("  - Arquivo .gage salvo\n")
 
-# Salvar arquivo .hms
 txt_hms <- paste0("Project: ", projectName, "\n",
                   "     Description: \n",
                   "     Version: 4.12\n",
@@ -463,7 +444,6 @@ hmsFile <- paste0(projectFolder, projectName, ".hms")
 write(txt_hms, file = hmsFile, append = FALSE)
 cat("  - Arquivo .hms salvo\n")
 
-# Salvar arquivo .run
 txt_run_final <- paste0(txt_run, "\n\n",
                         "Control: dp>5d\n",
                         "     FileName: dp_5d.control\n",
@@ -492,5 +472,4 @@ cat("  - ", projectFileDss, "\n")
 cat("  - ", contador_eventos, " arquivos .met individuais\n")
 cat("=================================================================\n\n")
 
-# Sinal sonoro de conclusão
 beep(1)
