@@ -8,17 +8,14 @@
 ###############################################################################
 #
 # 1. CARREGAMENTO DE BIBLIOTECAS -----------------------------------------------
-library(dssrip)
-library(foreach)
-library(stringr)
-library(xts)
-library(ggplot2)
-library(dplyr)
-library(matlib)
-library(data.table)
-library(readxl)
-library(splines)
-library(beepr)
+# ---- Pacotes ----
+pacotes_necessarios <- c("shiny", "rhandsontable", "dssrip", "foreach", "stringr",
+                          "xts", "ggplot2", "dplyr", "matlib", "data.table",
+                          "readxl", "splines", "beepr")
+for (pkg in pacotes_necessarios) {
+  if (!requireNamespace(pkg, quietly = TRUE)) install.packages(pkg, dependencies = TRUE)
+  library(pkg, character.only = TRUE)
+}
 
 ###############################################################################
 
