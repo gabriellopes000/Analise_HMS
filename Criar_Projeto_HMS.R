@@ -1,5 +1,5 @@
 ################################################################################
-# APP SHINY - GERADOR DE ARQUIVOS DO HMS
+# GERADOR DE ARQUIVOS DO HMS - VERSÃO 1 - 09/2026
 ################################################################################
 
 
@@ -11,13 +11,11 @@
 
 # PARA EXECUTAR APERTE CTRL+A SEGUIDO DE CTRL+ENTER
 
-
 # NÃO É NECESSÁRIA NENHUMA ALTERAÇÃO MANUAL NO CÓDIGO
 
+# O PACOTE DSSRIP PRECISA ESTAR CORRETAMENTE INSTALADO E CONFIGURADO NESTA MÁQUINA PARA QUE A GERAÇÃO DOS ARQUIVOS FUNCIONE.
 
-
-
-
+# EM CASO DE DÚVIDAS, PROCURE GABRIEL DE PAULA OU VINÍCIUS MOREIRA.
 
 
 
@@ -415,12 +413,11 @@ ui <- fluidPage(
                column(6,
                       h4("Quantis de precipitação"),
                       helpText("Cole os dados diretamente do Excel (Ctrl+V dentro da tabela). ",
-                               "Coluna 'Duracao' aceita formatos como '5 min', '1 h', '2 d'."),
+                               "Coluna 'Duracao' aceita formatos como '5 min', '1 h', '2 d'"),
                       tags$div(
                         style = "background-color:#fff3cd; padding:8px 12px; border-radius:4px; margin-bottom:10px;",
-                        strong("Nota: "), "as colunas ", strong("PMP"), " e ", strong("PMP majorada"),
-                        " correspondem à Precipitação Máxima Provável e à PMP majorada (quando aplicável), ",
-                        "respectivamente, não são tempos de retorno em anos."
+                        strong("Nota: "), "idealmente as colunas ", strong("Bloco"), " e ", strong("Sufix"),
+                        " não devem ser alteradas."
                       ),
                       rHandsontableOutput("tabela_quantis"),
                       br(),
@@ -503,7 +500,7 @@ server <- function(input, output, session) {
   session$onSessionEnded(function() {
     stopApp()
   })
-
+  
   # ---- Configuração: durações/blocos -----------------------------------
   duracoes_config_rv <- reactiveVal(
     data.frame(
@@ -873,4 +870,3 @@ runApp(shinyApp(ui, server))
 if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
   rstudioapi::restartSession()
 }
-
