@@ -34,6 +34,26 @@
 ################################################################################
 ################################################################################
 
+if(R.Version()$arch=="x86_64"){
+  # use 64-bit .jar and .dll
+  options(dss_override_location="C:\\Program Files\\HEC\\HEC-DSSVue\\")
+  Sys.setenv(JAVA_HOME=paste0(options("dss_override_location"), "java"))
+} else {
+  # use 32-bit .jar and .dll (old dssrip, no longer needed)
+}
+
+
+# 1) onde estão os jars e a DLL extraída
+options(dss_override_location = "C:/projects/dssrip/monolith")
+
+# 2) onde está o seu arquivo de configuração recém-salvo
+options(dss_config_filename  = "C:/projects/dssrip/monolith/dssrip.config")
+
+# 3) forçar uso desta configuração
+options(dss_default_config   = "monolith-win-x86_64")
+options(dss_allowed_states   = "tested")
+options(dssrip_debug         = TRUE)
+
 pacotes_necessarios <- c("shiny", "shinyWidgets", "shinyFiles", "shinyFeedback",
                          "rhandsontable", "plotly", "DT", "fs",
                          "dssrip", "foreach", "stringr", "xts", "ggplot2",
