@@ -8,7 +8,6 @@
 
 
 
-
 # PARA EXECUTAR APERTE CTRL+A SEGUIDO DE CTRL+ENTER
 
 # NÃO É NECESSÁRIA NENHUMA ALTERAÇÃO MANUAL NO CÓDIGO
@@ -30,29 +29,21 @@
 
 
 
-
 ################################################################################
 ################################################################################
+rm(list = ls())
 
-if(R.Version()$arch=="x86_64"){
-  # use 64-bit .jar and .dll
-  options(dss_override_location="C:\\Program Files\\HEC\\HEC-DSSVue\\")
-  Sys.setenv(JAVA_HOME=paste0(options("dss_override_location"), "java"))
-} else {
-  # use 32-bit .jar and .dll (old dssrip, no longer needed)
-}
-
-
-# 1) onde estão os jars e a DLL extraída
-options(dss_override_location = "C:/projects/dssrip/monolith")
-
-# 2) onde está o seu arquivo de configuração recém-salvo
-options(dss_config_filename  = "C:/projects/dssrip/monolith/dssrip.config")
-
-# 3) forçar uso desta configuração
-options(dss_default_config   = "monolith-win-x86_64")
-options(dss_allowed_states   = "tested")
-options(dssrip_debug         = TRUE)
+options(
+  dss_override_location = "C:/dssrip",
+  dss_config_filename = system.file(
+    "config",
+    "jar_config.json",
+    package = "dssrip"
+  ),
+  dss_default_config = "monolith-win-x86_64",
+  dss_allowed_states = "tested",
+  dssrip_debug = FALSE
+)
 
 pacotes_necessarios <- c("shiny", "shinyWidgets", "shinyFiles", "shinyFeedback",
                          "rhandsontable", "plotly", "DT", "fs",
@@ -64,7 +55,7 @@ for (pkg in pacotes_necessarios) {
 }
 
 options(shiny.launch.browser = TRUE)
-rm(list = ls())
+
 # ==============================================================================
 # FUNÇÕES AUXILIARES
 # ==============================================================================
@@ -890,3 +881,153 @@ runApp(shinyApp(ui, server))
 if (requireNamespace("rstudioapi", quietly = TRUE) && rstudioapi::isAvailable()) {
   rstudioapi::restartSession()
 }
+
+###################################################
+# 
+# # APENDICE - INSTALAÇÃO DO DSSRIP
+
+# 
+# # Instalar as dependências necessárias do dssrip.
+# # Os avisos informando que alguns pacotes foram compilados
+# # em versões diferentes do R 4.5.x podem ser ignorados,
+# # desde que o pacote seja carregado corretamente.
+# install.packages(c(
+#   "rJava",
+#   "plyr",
+#   "reshape2",
+#   "stringr",
+#   "xts",
+#   "broom",
+#   "rjson",
+#   "remotes"
+# ))
+# 
+# # Criar as pastas utilizadas pelo dssrip para armazenar
+# # os arquivos .jar e as bibliotecas nativas do HEC-DSS.
+# dir.create(
+#   "C:/dssrip/jar",
+#   recursive = TRUE,
+#   showWarnings = FALSE
+# )
+# 
+# dir.create(
+#   "C:/dssrip/lib",
+#   recursive = TRUE,
+#   showWarnings = FALSE
+# )
+# 
+# # Configurar o local das dependências do HEC-DSS.
+# options(
+#   dss_override_location = "C:/dssrip",
+#   
+#   # Utilizar a configuração do HEC-DSS para Windows 64 bits.
+#   dss_default_config = "monolith-win-x86_64",
+#   
+#   # Permitir a configuração marcada como "tested".
+#   # A configuração "untested" não funcionou neste ambiente.
+#   dss_allowed_states = "tested",
+#   
+#   # TRUE exibe mensagens detalhadas durante a instalação
+#   # e o carregamento do pacote.
+#   dssrip_debug = TRUE
+# )
+# 
+# # Instalar o dssrip diretamente do GitHub.
+# # O parâmetro --no-multiarch evita instalações para
+# # arquiteturas diferentes da arquitetura atual do R.
+# remotes::install_github(
+#   "eheisman/dssrip",
+#   ref = "main",
+#   INSTALL_opts = "--no-multiarch"
+# )
+# 
+# # ============================================================
+# # Correção da localização do arquivo jar_config.json
+# # ============================================================
+# 
+# # Durante o carregamento, o dssrip pode apresentar o erro:
+# #
+# # cannot open file './config/jar_config.json':
+# # No such file or directory
+# #
+# # Neste ambiente, a pasta "config" precisou ser movida para:
+# #
+# # C:/Users/gabriel.paula/AppData/Local/R/win-library/4.5/dssrip/config
+# #
+# # A pasta deve conter o arquivo:
+# #
+# # jar_config.json
+# #
+# # A estrutura esperada é:
+# #
+# # dssrip/
+# # └── config/
+# #     └── jar_config.json
+# 
+# # Definir explicitamente o caminho do arquivo de configuração.
+# # O comando find.package() identifica automaticamente o local
+# # onde o pacote dssrip está instalado.
+# options(
+#   dss_config_filename = file.path(
+#     find.package("dssrip"),
+#     "config",
+#     "jar_config.json"
+#   )
+# )
+# 
+# # Verificar se o arquivo jar_config.json foi encontrado.
+# # O resultado esperado é TRUE.
+# file.exists(
+#   file.path(
+#     find.package("dssrip"),
+#     "config",
+#     "jar_config.json"
+#   )
+# )
+# 
+# # ============================================================
+# # Carregamento do pacote
+# # ============================================================
+# 
+# # Recomenda-se reiniciar o R ou o RStudio antes de carregar
+# # o dssrip, especialmente porque o pacote utiliza rJava.
+# library(dssrip)
+# 
+# # Verificar se o pacote foi carregado corretamente.
+# "dssrip" %in% loadedNamespaces()
+# 
+# # Verificar a versão instalada do pacote.
+# packageVersion("dssrip")
+# 
+# 
+# # ============================================================
+# # Configuração permanente no arquivo .Rprofile
+# # ============================================================
+# 
+# # Para não repetir as opções em cada sessão, abrir o arquivo
+# # .Rprofile com o comando abaixo:
+# #
+# # file.edit("~/.Rprofile")
+# #
+# # Adicionar ao arquivo .Rprofile:
+# 
+# # options(
+# #   dss_override_location = "C:/dssrip",
+# #   dss_config_filename = file.path(
+# #     find.package("dssrip"),
+# #     "config",
+# #     "jar_config.json"
+# #   ),
+# #   dss_default_config = "monolith-win-x86_64",
+# #   dss_allowed_states = "tested",
+# #   dssrip_debug = FALSE
+# # )
+# 
+# # Observação:
+# # Caso a versão do R seja alterada, o caminho da biblioteca pode mudar.
+# # Por exemplo:
+# #
+# # C:/Users/gabriel.paula/AppData/Local/R/win-library/4.5/dssrip
+# #
+# # Nesse caso, a pasta "config" deverá ser copiada ou movida para
+# # o novo diretório de instalação do pacote.
