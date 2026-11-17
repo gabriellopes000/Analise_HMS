@@ -272,11 +272,15 @@ gerar_arquivos_hms <- function(quantis, trs, basin, subbasins, projectName, proj
       
       # ---- Texto do .run ---------------------------------------------------
       control <- ifelse(dias <= 5, "dp<=5d", "dp>5d")
-      txt_run <- paste0(txt_run, "\n\nRun: ", nome_evento, "\n",
-                        "    Basin: ", basin, "\n",
-                        "    Precip: ", nome_evento, "\n",
-                        "    Control: ", control, "\n",
-                        "End:")
+      txt_run <- paste0(txt_run,
+                        "Run: ", nome_evento, "\n",
+                        "     Default Description: Yes\n",
+                        "     Log File: ", nome_evento, ".log\n",
+                        "     DSS File: ", nome_evento, ".dss\n",
+                        "     Basin: ", basin, "\n",
+                        "     Precip: ", nome_evento, "\n",
+                        "     Control: ", control, "\n",
+                        "End:\n\n")
       
       contador_eventos <- contador_eventos + 1
       passo <- passo + 1
@@ -324,18 +328,8 @@ gerar_arquivos_hms <- function(quantis, trs, basin, subbasins, projectName, proj
   write(txt_hms, file = hmsFile, append = FALSE)
   
   # ---- Arquivo .run ------------------------------------------------------
-  txt_run_final <- paste0(txt_run, "\n\n",
-                          "Control: dp>5d\n",
-                          "     FileName: dp_5d.control\n",
-                          "     Description: \n",
-                          "End:\n\n",
-                          "Control: dp<=5d\n",
-                          "     FileName: dp__5d.control\n",
-                          "     Description: \n",
-                          "End:")
-  
   runFile <- file.path(projectFolder, paste0(projectName, ".run"))
-  write(txt_run_final, file = runFile, append = FALSE)
+  write(txt_run, file = runFile, append = FALSE)
   
   list(
     total_eventos = contador_eventos,
