@@ -1,5 +1,5 @@
 ################################################################################
-# GERADOR DE ARQUIVOS DO HMS - VERSÃO 1 - 09/2026
+# GERADOR DE ARQUIVOS DO HMS - VERSAO 1.1 - 11/2026
 ################################################################################
 
 
@@ -270,17 +270,33 @@ gerar_arquivos_hms <- function(quantis, trs, basin, subbasins, projectName, proj
                         "     Description: \n",
                         "End:\n\n")
       
-      # ---- Texto do .run ---------------------------------------------------
-      control <- ifelse(dias <= 5, "dp<=5d", "dp>5d")
-      txt_run <- paste0(txt_run,
-                        "Run: ", nome_evento, "\n",
-                        "     Default Description: Yes\n",
-                        "     Log File: ", nome_evento, ".log\n",
-                        "     DSS File: ", nome_evento, ".dss\n",
-                        "     Basin: ", basin, "\n",
-                        "     Precip: ", nome_evento, "\n",
-                        "     Control: ", control, "\n",
-                        "End:\n\n")
+      # ---- Texto do .run (formato de referencia do HEC-HMS) -----------------
+      control <- if (duracao <= 5 * 24 * 60) "dp<=5d" else "dp>5d"
+
+      # O arquivo DSS de entrada permanece unico para todo o projeto.
+      # Os nomes de log/resultados substituem espacos por sublinhados.
+      nome_arquivo_run <- gsub(" ", "_", nome_evento, fixed = TRUE)
+      agora <- Sys.time()
+      meses_ingles <- c("January", "February", "March", "April", "May", "June",
+                        "July", "August", "September", "October", "November", "December")
+      data_modificacao <- paste(as.integer(format(agora, "%d")),
+                                meses_ingles[as.integer(format(agora, "%m"))],
+                                format(agora, "%Y"))
+      hora_modificacao <- format(agora, "%H:%M:%S")
+
+      txt_run <- paste0(
+        txt_run,
+        "Run: ", nome_evento, "\n",
+        "     Default Description: Yes\n",
+        "     Log File: ", nome_arquivo_run, ".log\n",
+        "     DSS File: ", projectName, ".dss\n",
+        "     Last Modified Date: ", data_modificacao, "\n",
+        "     Last Modified Time: ", hora_modificacao, "\n",
+        "     Basin: ", basin, "\n",
+        "     Precip: ", nome_evento, "\n",
+        "     Control: ", control, "\n",
+        "End:\n\n"
+      )
       
       contador_eventos <- contador_eventos + 1
       passo <- passo + 1
@@ -328,8 +344,9 @@ gerar_arquivos_hms <- function(quantis, trs, basin, subbasins, projectName, proj
   write(txt_hms, file = hmsFile, append = FALSE)
   
   # ---- Arquivo .run ------------------------------------------------------
+  # O .run contem apenas blocos Run. Os controles ficam declarados no .hms.
   runFile <- file.path(projectFolder, paste0(projectName, ".run"))
-  write(txt_run, file = runFile, append = FALSE)
+  writeLines(txt_run, con = runFile, useBytes = TRUE)
   
   list(
     total_eventos = contador_eventos,
@@ -348,7 +365,7 @@ ui <- fluidPage(
       "Gerador de Arquivos do HMS",
       tags$div(
         style = "font-size: 16px; font-weight: normal; color: #555; margin-top: 4px;",
-        "Distribuição de Huff - Versão 1 - 09/2026"
+        "Distribuição de Huff - Versão 1.1 - 11/2026"
       )
     )
   ),
