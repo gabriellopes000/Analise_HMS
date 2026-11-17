@@ -272,7 +272,7 @@ gerar_arquivos_hms <- function(quantis, trs, basin, subbasins, projectName, proj
       
       # ---- Texto do .run (formato de referencia do HEC-HMS) -----------------
       control <- if (duracao <= 5 * 24 * 60) "dp<=5d" else "dp>5d"
-
+      
       # O arquivo DSS de entrada permanece unico para todo o projeto.
       # Os nomes de log/resultados substituem espacos por sublinhados.
       nome_arquivo_run <- gsub(" ", "_", nome_evento, fixed = TRUE)
@@ -283,7 +283,7 @@ gerar_arquivos_hms <- function(quantis, trs, basin, subbasins, projectName, proj
                                 meses_ingles[as.integer(format(agora, "%m"))],
                                 format(agora, "%Y"))
       hora_modificacao <- format(agora, "%H:%M:%S")
-
+      
       txt_run <- paste0(
         txt_run,
         "Run: ", nome_evento, "\n",
@@ -395,6 +395,8 @@ ui <- fluidPage(
                strong("Gabriel de Paula"), " ou ", strong("Vinícius Moreira"), ".",
                tags$br(), tags$br(),
                strong("Antes de rodar o aplicativo: "), "feche o HEC-HMS, caso esteja aberto, para evitar conflitos de acesso aos arquivos do projeto.",
+               tags$br(),
+               strong("O código foi testado apenas no HEC-HMS 4.12"),
                tags$br(),
                strong("Para rodar novamente: "), "se precisar executar o aplicativo mais de uma vez, feche a janela do navegador referente à execução anterior antes de iniciar uma nova."
              ),
